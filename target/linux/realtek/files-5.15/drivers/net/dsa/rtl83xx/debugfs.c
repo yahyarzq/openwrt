@@ -595,8 +595,13 @@ void rtl838x_dbgfs_init(struct rtl838x_switch_priv *priv)
 
 	priv->dbgfs_dir = rtl838x_dir;
 
+<<<<<<< HEAD:target/linux/realtek/files-5.10/drivers/net/dsa/rtl83xx/debugfs.c
+	debugfs_create_u32("soc", 0444, rtl838x_dir,
+			   (u32 *)(RTL83XX_MODEL_NAME_INFO));
+=======
 	debugfs_create_x32("soc", 0444, rtl838x_dir,
 			   (u32 *)(RTL838X_SW_BASE + RTL838X_MODEL_NAME_INFO));
+>>>>>>> 8198c-update:target/linux/realtek/files-5.15/drivers/net/dsa/rtl83xx/debugfs.c
 
 	/* Create one directory per port */
 	for (int i = 0; i < priv->cpu_port; i++) {

@@ -190,6 +190,11 @@ CONFIG_REGMAP=y
 CONFIG_REGMAP_I2C=y
 CONFIG_REGMAP_MMIO=y
 CONFIG_RESET_CONTROLLER=y
+<<<<<<< HEAD:target/linux/realtek/rtl838x/config-5.10
+# CONFIG_RTL8198C is not set
+CONFIG_RTL83XX=y
+=======
+>>>>>>> 8198c-update:target/linux/realtek/rtl838x/config-5.15
 CONFIG_RTL838X=y
 # CONFIG_RTL839X is not set
 CONFIG_RTL83XX=y
