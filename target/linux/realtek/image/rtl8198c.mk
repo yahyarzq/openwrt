@@ -12,4 +12,18 @@ define Device/f-secure_sense
   KERNEL_INITRAMFS := kernel-bin | append-dtb | lzma | loader-kernel
 endef
 
-# TARGET_DEVICES += f-secure_sense
+TARGET_DEVICES += f-secure_sense
+
+define Device/mercury_gapm-7100
+  LOADADDR := 0x80000000
+  LOADER_PLATFORM := rtl8198c
+  LOADER_TYPE := bin
+  LZMA_TEXT_START := 0x84000000
+  SOC := rtl8198c
+  DEVICE_VENDOR := Mercury
+  DEVICE_MODEL := GAPM-7100
+  IMAGE_SIZE := 32768k
+  KERNEL_INITRAMFS := kernel-bin | append-dtb | lzma | loader-kernel
+endef
+
+TARGET_DEVICES += mercury_gapm-7100
