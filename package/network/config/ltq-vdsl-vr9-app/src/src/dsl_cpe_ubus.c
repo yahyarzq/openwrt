@@ -133,9 +133,24 @@ enum {
 	PSTATE_MAP_L3,
 };
 
+/* These values are exported via ubus and backwards compability
+ * needs to be kept!
+ */
+enum {
+	RAMODE_MAP_UNKNOWN = -1,
+	RAMODE_MAP_MANUAL,
+	RAMODE_MAP_AT_INIT,
+	RAMODE_MAP_DYNAMIC,
+	RAMODE_MAP_DYNAMIC_SOS,
+};
+
 static DSL_CPE_ThreadCtrl_t thread;
 static struct ubus_context *ctx;
 static struct blob_buf b;
+
+static inline void m_null() {
+	blobmsg_add_field(&b, BLOBMSG_TYPE_UNSPEC, "", NULL, 0);
+}
 
 static inline void m_double(const char *id, double value) {
 	blobmsg_add_double(&b, id, value);
@@ -153,14 +168,24 @@ static inline void m_str(const char *id, const char *value) {
 	blobmsg_add_string(&b, id, value);
 }
 
-static inline void m_db(const char *id, int value) {
-	m_double(id, (double)value / 10);
+static inline void m_db(const char *id, int value, int invalid) {
+	if (value != invalid)
+		m_double(id, (double)value / 10);
 }
 
-static inline void m_array(const char *id, const uint8_t *value, uint8_t len) {
+static inline void m_array(const char *id, const uint8_t *value, size_t len) {
 	void *c = blobmsg_open_array(&b, id);
 
-	for (uint8_t i = 0; i < len; ++i)
+	for (size_t i = 0; i < len; ++i)
+		blobmsg_add_u16(&b, "", value[i]);
+
+	blobmsg_close_array(&b, c);
+}
+
+static inline void m_array_u16(const char *id, const uint16_t *value, size_t len) {
+	void *c = blobmsg_open_array(&b, id);
+
+	for (size_t i = 0; i < len; ++i)
 		blobmsg_add_u16(&b, "", value[i]);
 
 	blobmsg_close_array(&b, c);
@@ -413,6 +438,94 @@ static void g997_line_inventory(int fd) {
 	m_array("serial", out.data.SerialNumber, DSL_G997_LI_MAXLEN_SERIAL);
 }
 
+static void pilot_tones_status(int fd) {
+#ifndef INCLUDE_DSL_CPE_API_DANUBE
+	IOCTL(DSL_PilotTonesStatus_t, DSL_FIO_PILOT_TONES_STATUS_GET);
+
+	m_array_u16("pilot_tones", out.data.nPilotTone, out.data.nNumData);
+#endif
+}
+
+static void band_border_status(int fd, DSL_AccessDir_t direction) {
+	IOCTL(DSL_BandBorderStatus_t, DSL_FIO_BAND_BORDER_STATUS_GET);
+
+	void *c, *c2;
+
+	c = blobmsg_open_array(&b, "limits");
+
+	for (size_t i = 0; i < out.data.nNumData; i++) {
+		c2 = blobmsg_open_table(&b, "");
+		blobmsg_add_u16(&b, "first", out.data.nBandLimits[i].nFirstToneIndex);
+		blobmsg_add_u16(&b, "last", out.data.nBandLimits[i].nLastToneIndex);
+		blobmsg_close_table(&b, c2);
+	}
+
+	blobmsg_close_array(&b, c);
+}
+
+static void g977_get_bit_allocation(int fd, DSL_AccessDir_t direction) {
+	IOCTL_DIR(DSL_G997_BitAllocationNsc_t, DSL_FIO_G997_BIT_ALLOCATION_NSC_GET, direction);
+
+	// create default value to obtain consistent JSON structure
+	m_u32("groupsize", 1);
+	m_u32("groups", out.data.bitAllocationNsc.nNumData);
+	m_array("data", out.data.bitAllocationNsc.nNSCData, out.data.bitAllocationNsc.nNumData);
+}
+
+static void g977_get_snr(int fd, DSL_AccessDir_t direction) {
+	IOCTL_DIR_DELT(DSL_G997_DeltSnr_t, DSL_FIO_G997_DELT_SNR_GET, direction, DSL_DELT_DATA_SHOWTIME);
+
+	m_u32("groupsize", out.data.nGroupSize);
+	m_u32("groups", out.data.deltSnr.nNumData);
+
+	void *c = blobmsg_open_array(&b, "data");
+
+	// SNR -32 ... 95 dB
+	for (uint16_t i  = 0  ; i < out.data.deltSnr.nNumData ; i++)
+		if (out.data.deltSnr.nNSCData[i] != 255 && out.data.deltSnr.nNSCData[i] != 0)
+			m_double("", -32 + (double)out.data.deltSnr.nNSCData[i] / 2);
+		else
+			m_null();
+
+	blobmsg_close_array(&b, c);
+}
+
+static void g977_get_qln(int fd, DSL_AccessDir_t direction) {
+	IOCTL_DIR_DELT(DSL_G997_DeltQln_t, DSL_FIO_G997_DELT_QLN_GET, direction, DSL_DELT_DATA_SHOWTIME);
+
+	m_u32("groupsize", out.data.nGroupSize);
+	m_u32("groups", out.data.deltQln.nNumData);
+
+	void *c = blobmsg_open_array(&b, "data");
+
+	// QLN -150 ... -23 dBm/Hz
+	for (uint16_t i  = 0  ; i < out.data.deltQln.nNumData ; i++)
+		if (out.data.deltQln.nNSCData[i] != 255 && out.data.deltQln.nNSCData[i] != 0)
+			m_double("", -23 - (double)out.data.deltQln.nNSCData[i] / 2);
+		else
+			m_null();
+
+	blobmsg_close_array(&b, c);
+}
+
+static void g977_get_hlog(int fd, DSL_AccessDir_t direction) {
+	IOCTL_DIR_DELT(DSL_G997_DeltHlog_t, DSL_FIO_G997_DELT_HLOG_GET, direction, DSL_DELT_DATA_SHOWTIME);
+
+	m_u32("groupsize", out.data.nGroupSize);
+	m_u32("groups", out.data.deltHlog.nNumData);
+
+	void *c = blobmsg_open_array(&b, "data");
+
+	// HLOG +6 ... -96 dB
+	for (uint16_t i  = 0  ; i < out.data.deltHlog.nNumData ; i++)
+		if (out.data.deltHlog.nNSCData[i] != 1023 && out.data.deltHlog.nNSCData[i] != 0)
+			m_double("", 6 - (double)out.data.deltHlog.nNSCData[i] / 10);
+		else
+			m_null();
+
+	blobmsg_close_array(&b, c);
+}
+
 static void g997_power_management_status(int fd) {
 	IOCTL(DSL_G997_PowerManagementStatus_t, DSL_FIO_G997_POWER_MANAGEMENT_STATUS_GET)
 
@@ -571,19 +684,46 @@ static void band_plan_status(int fd, profile_t *profile) {
 #endif
 }
 
-static void line_feature_config(int fd, DSL_AccessDir_t direction) {
+static void line_feature_config(int fd, DSL_AccessDir_t direction, bool *retx) {
 	IOCTL_DIR(DSL_LineFeature_t, DSL_FIO_LINE_FEATURE_STATUS_GET, direction)
 
 	m_bool("trellis", out.data.bTrellisEnable);
 	m_bool("bitswap", out.data.bBitswapEnable);
 	m_bool("retx", out.data.bReTxEnable);
 	m_bool("virtual_noise", out.data.bVirtualNoiseSupport);
+
+	*retx = out.data.bReTxEnable;
+}
+
+static void g997_rate_adaptation_status(int fd, DSL_AccessDir_t direction) {
+#ifndef INCLUDE_DSL_CPE_API_DANUBE
+	IOCTL_DIR(DSL_G997_RateAdaptationStatus_t, DSL_FIO_G997_RATE_ADAPTATION_STATUS_GET, direction);
+
+	int map = RAMODE_MAP_UNKNOWN;
+	const char *str;
+	switch (out.data.RA_MODE) {
+	STR_CASE_MAP(DSL_G997_RA_MODE_MANUAL, "Manual", RAMODE_MAP_MANUAL)
+	STR_CASE_MAP(DSL_G997_RA_MODE_AT_INIT, "At initialization", RAMODE_MAP_AT_INIT)
+	STR_CASE_MAP(DSL_G997_RA_MODE_DYNAMIC, "Dynamic", RAMODE_MAP_DYNAMIC)
+	STR_CASE_MAP(DSL_G997_RA_MODE_DYNAMIC_SOS, "Dynamic with SOS", RAMODE_MAP_DYNAMIC_SOS)
+	default:
+		str = NULL;
+		break;
+	};
+
+	if (str)
+		m_str("ra_mode", str);
+
+	if (map != PSTATE_MAP_UNKNOWN)
+		m_u32("ra_mode_num", map);
+#endif
 }
 
 static void g997_channel_status(int fd, DSL_AccessDir_t direction) {
 	IOCTL_DIR(DSL_G997_ChannelStatus_t, DSL_FIO_G997_CHANNEL_STATUS_GET, direction);
 
 	m_u32("interleave_delay", out.data.ActualInterleaveDelay * 10);
+	m_double("inp", (double)out.data.ActualImpulseNoiseProtection / 10);
 #ifndef INCLUDE_DSL_CPE_API_DANUBE
 	// prefer ACTNDR, see comments in drv_dsl_cpe_api_g997.h
 	m_u32("data_rate", out.data.ActualNetDataRate);
@@ -595,13 +735,49 @@ static void g997_channel_status(int fd, DSL_AccessDir_t direction) {
 static void g997_line_status(int fd, DSL_AccessDir_t direction) {
 	IOCTL_DIR_DELT(DSL_G997_LineStatus_t, DSL_FIO_G997_LINE_STATUS_GET, direction, DSL_DELT_DATA_SHOWTIME);
 
-	m_db("latn", out.data.LATN);
-	m_db("satn", out.data.SATN);
-	m_db("snr", out.data.SNR);
-	m_db("actps", out.data.ACTPS);
-	m_db("actatp", out.data.ACTATP);
+	// invalid value indicators taken from drv_dsl_cpe_api_g997.h
+	m_db("latn", out.data.LATN, 1271);
+	m_db("satn", out.data.SATN, 1271);
+	m_db("snr", out.data.SNR, -641);
+	m_db("actps", out.data.ACTPS, -901);
+	m_db("actatp", out.data.ACTATP, -512);
 	m_u32("attndr", out.data.ATTNDR);
 }
+
+static void pm_retx_counters_showtime(int fd, DSL_XTUDir_t direction) {
+#ifdef INCLUDE_DSL_CPE_PM_RETX_COUNTERS
+	IOCTL_DIR(DSL_PM_ReTxCounters_t, DSL_FIO_PM_RETX_COUNTERS_SHOWTIME_GET, direction);
+
+	m_u32("mineftr", out.data.nEftrMin);
+#endif
+}
+
+#ifndef INCLUDE_DSL_CPE_API_DANUBE
+static void olr_statistics(int fd, DSL_AccessDir_t direction) {
+	IOCTL_DIR(DSL_OlrStatistics_t, DSL_FIO_OLR_STATISTICS_GET, direction)
+
+	void *c = blobmsg_open_table(&b, "bitswap");
+	m_u32("requested", out.data.nBitswapRequested + out.data.nBitswapRequested);
+	m_u32("executed", out.data.nBitswapExecuted);
+	m_u32("rejected", out.data.nBitswapRejected);
+	m_u32("timeout", out.data.nBitswapTimeout);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "sra");
+	m_u32("requested", out.data.nSraRequested);
+	m_u32("executed", out.data.nSraExecuted);
+	m_u32("rejected", out.data.nSraRejected);
+	m_u32("timeout", out.data.nSraTimeout);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "sos");
+	m_u32("requested", out.data.nSosRequested);
+	m_u32("executed", out.data.nSosExecuted);
+	m_u32("rejected", out.data.nSosRejected);
+	m_u32("timeout", out.data.nSosTimeout);
+	blobmsg_close_table(&b, c);
+}
+#endif
 
 static void pm_line_sec_counters_total(int fd, DSL_XTUDir_t direction) {
 	IOCTL_DIR(DSL_PM_LineSecCountersTotal_t, DSL_FIO_PM_LINE_SEC_COUNTERS_TOTAL_GET, direction)
@@ -614,6 +790,21 @@ static void pm_line_sec_counters_total(int fd, DSL_XTUDir_t direction) {
 #ifndef INCLUDE_DSL_CPE_API_DANUBE
 	m_u32("fecs", out.data.nFECS);
 #endif
+}
+
+static void pm_retx_counters_total(int fd, DSL_XTUDir_t direction) {
+#ifdef INCLUDE_DSL_CPE_PM_RETX_COUNTERS
+	IOCTL_DIR(DSL_PM_ReTxCountersTotal_t, DSL_FIO_PM_RETX_COUNTERS_TOTAL_GET, direction);
+
+	m_u32("leftrs", out.data.nLeftr);
+#endif
+}
+
+static void pm_channel_counters_total(int fd, DSL_XTUDir_t direction) {
+	IOCTL_DIR(DSL_PM_ChannelCountersTotal_t, DSL_FIO_PM_CHANNEL_COUNTERS_TOTAL_GET, direction);
+
+	m_u32("cv_c", out.data.nCodeViolations);
+	m_u32("fec_c", out.data.nFEC);
 }
 
 static void pm_data_path_counters_total(int fd, DSL_XTUDir_t direction) {
@@ -724,6 +915,77 @@ static void describe_mode(standard_t standard, profile_t profile, vector_t vecto
 	m_str("mode", buf);
 }
 
+static int line_statistics(struct ubus_context *ctx, struct ubus_object *obj,
+                   struct ubus_request_data *req, const char *method,
+                   struct blob_attr *msg)
+{
+	int fd;
+	void *c, *c2;
+
+#ifndef INCLUDE_DSL_CPE_API_DANUBE
+	fd = open(DSL_CPE_DEVICE_NAME "/0", O_RDWR, 0644);
+#else
+	fd = open(DSL_CPE_DEVICE_NAME, O_RDWR, 0644);
+#endif
+	if (fd < 0)
+		return UBUS_STATUS_UNKNOWN_ERROR;
+
+	blob_buf_init(&b, 0);
+
+	pilot_tones_status(fd);
+
+	c = blobmsg_open_table(&b, "bands");
+	c2 = blobmsg_open_table(&b, "downstream");
+	band_border_status(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	band_border_status(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "bits");
+	c2 = blobmsg_open_table(&b, "downstream");
+	g977_get_bit_allocation(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	g977_get_bit_allocation(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "snr");
+	c2 = blobmsg_open_table(&b, "downstream");
+	g977_get_snr(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	g977_get_snr(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "qln");
+	c2 = blobmsg_open_table(&b, "downstream");
+	g977_get_qln(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	g977_get_qln(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+
+	c = blobmsg_open_table(&b, "hlog");
+	c2 = blobmsg_open_table(&b, "downstream");
+	g977_get_hlog(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	g977_get_hlog(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+
+	ubus_send_reply(ctx, req, b.head);
+
+	close(fd);
+
+	return 0;
+}
+
 static int metrics(struct ubus_context *ctx, struct ubus_object *obj,
 		   struct ubus_request_data *req, const char *method,
 		   struct blob_attr *msg)
@@ -733,6 +995,7 @@ static int metrics(struct ubus_context *ctx, struct ubus_object *obj,
 	standard_t standard = STD_UNKNOWN;
 	profile_t profile = PROFILE_UNKNOWN;
 	vector_t vector = VECTOR_UNKNOWN;
+	bool retx_up = false, retx_down = false;
 
 #ifndef INCLUDE_DSL_CPE_API_DANUBE
 	fd = open(DSL_CPE_DEVICE_NAME "/0", O_RDWR, 0644);
@@ -779,9 +1042,12 @@ static int metrics(struct ubus_context *ctx, struct ubus_object *obj,
 	default:
 		break;
 	};
-	line_feature_config(fd, DSL_UPSTREAM);
+	line_feature_config(fd, DSL_UPSTREAM, &retx_up);
+	g997_rate_adaptation_status(fd, DSL_UPSTREAM);
 	g997_channel_status(fd, DSL_UPSTREAM);
 	g997_line_status(fd, DSL_UPSTREAM);
+	if (retx_up)
+		pm_retx_counters_showtime(fd, DSL_FAR_END);
 	blobmsg_close_table(&b, c);
 
 	c = blobmsg_open_table(&b, "downstream");
@@ -796,20 +1062,40 @@ static int metrics(struct ubus_context *ctx, struct ubus_object *obj,
 	default:
 		break;
 	};
-	line_feature_config(fd, DSL_DOWNSTREAM);
+	line_feature_config(fd, DSL_DOWNSTREAM, &retx_down);
+	g997_rate_adaptation_status(fd, DSL_DOWNSTREAM);
 	g997_channel_status(fd, DSL_DOWNSTREAM);
 	g997_line_status(fd, DSL_DOWNSTREAM);
+	if (retx_down)
+		pm_retx_counters_showtime(fd, DSL_NEAR_END);
 	blobmsg_close_table(&b, c);
+
+#ifndef INCLUDE_DSL_CPE_API_DANUBE
+	c = blobmsg_open_table(&b, "olr");
+	c2 = blobmsg_open_table(&b, "downstream");
+	olr_statistics(fd, DSL_DOWNSTREAM);
+	blobmsg_close_table(&b, c2);
+	c2 = blobmsg_open_table(&b, "upstream");
+	olr_statistics(fd, DSL_UPSTREAM);
+	blobmsg_close_table(&b, c2);
+	blobmsg_close_table(&b, c);
+#endif
 
 	c = blobmsg_open_table(&b, "errors");
 	c2 = blobmsg_open_table(&b, "near");
 	pm_line_sec_counters_total(fd, DSL_NEAR_END);
+	if (retx_down)
+		pm_retx_counters_total(fd, DSL_NEAR_END);
+	pm_channel_counters_total(fd, DSL_NEAR_END);
 	pm_data_path_counters_total(fd, DSL_NEAR_END);
 	retx_statistics(fd, DSL_NEAR_END);
 	blobmsg_close_table(&b, c2);
 
 	c2 = blobmsg_open_table(&b, "far");
 	pm_line_sec_counters_total(fd, DSL_FAR_END);
+	if (retx_up)
+		pm_retx_counters_total(fd, DSL_FAR_END);
+	pm_channel_counters_total(fd, DSL_FAR_END);
 	pm_data_path_counters_total(fd, DSL_FAR_END);
 	retx_statistics(fd, DSL_FAR_END);
 	blobmsg_close_table(&b, c2);
@@ -837,6 +1123,7 @@ static int metrics(struct ubus_context *ctx, struct ubus_object *obj,
 
 static const struct ubus_method dsl_methods[] = {
 	UBUS_METHOD_NOARG("metrics", metrics),
+	UBUS_METHOD_NOARG("statistics", line_statistics)
 };
 
 static struct ubus_object_type dsl_object_type =
