@@ -1,6 +1,6 @@
 PKG_DRIVERS += \
 	ath ath5k ath6kl ath6kl-sdio ath6kl-usb ath9k ath9k-common ath9k-htc ath10k ath10k-smallbuffers \
-	ath11k ath11k-pci carl9170 owl-loader ar5523 wil6210
+	ath11k ath11k-ahb ath11k-pci carl9170 owl-loader ar5523 wil6210
 
 PKG_CONFIG_DEPENDS += \
 	CONFIG_PACKAGE_ATH_DEBUG \
@@ -37,7 +37,7 @@ ifdef CONFIG_PACKAGE_MAC80211_TRACING
 	WIL6210_TRACING
 endif
 
-config-$(call config_package,ath) += ATH_CARDS ATH_COMMON
+config-$(call config_package,ath,regular smallbuffers) += ATH_CARDS ATH_COMMON
 config-$(CONFIG_PACKAGE_ATH_DEBUG) += ATH_DEBUG ATH10K_DEBUG ATH11K_DEBUG ATH9K_STATION_STATISTICS
 config-$(CONFIG_PACKAGE_ATH_DFS) += ATH9K_DFS_CERTIFIED ATH10K_DFS_CERTIFIED
 config-$(CONFIG_PACKAGE_ATH_SPECTRAL) += ATH9K_COMMON_SPECTRAL ATH10K_SPECTRAL ATH11K_SPECTRAL
@@ -58,17 +58,13 @@ config-$(CONFIG_ATH10K_THERMAL) += ATH10K_THERMAL
 config-$(CONFIG_ATH11K_THERMAL) += ATH11K_THERMAL
 
 config-$(call config_package,ath9k-htc) += ATH9K_HTC
-config-$(call config_package,ath10k) += ATH10K ATH10K_PCI
-config-$(call config_package,ath10k-smallbuffers) += ATH10K ATH10K_PCI ATH10K_SMALLBUFFERS
+config-$(call config_package,ath10k,regular) += ATH10K ATH10K_PCI
+config-$(call config_package,ath10k-smallbuffers,smallbuffers) += ATH10K ATH10K_PCI ATH10K_SMALLBUFFERS
 config-$(call config_package,ath11k) += ATH11K
+config-$(call config_package,ath11k-ahb) += ATH11K_AHB
 config-$(call config_package,ath11k-pci) += ATH11K_PCI
 
-config-$(call config_package,ath5k) += ATH5K
-ifdef CONFIG_TARGET_ath25
-  config-y += ATH5K_AHB
-else
-  config-y += ATH5K_PCI
-endif
+config-$(call config_package,ath5k) += ATH5K ATH5K_PCI
 
 config-$(call config_package,ath6kl) += ATH6KL
 config-$(call config_package,ath6kl-sdio) += ATH6KL_SDIO
@@ -97,7 +93,7 @@ define KernelPackage/ath/config
 		bool "Atheros wireless debugging"
 		help
 		  Say Y, if you want to debug atheros wireless drivers.
-		  Only ath9k & ath10k make use of this.
+		  Only ath9k & ath10k & ath11k make use of this.
 
 	config PACKAGE_ATH_DFS
 		bool "Enable DFS support"
@@ -132,7 +128,7 @@ endef
 define KernelPackage/ath
   $(call KernelPackage/mac80211/Default)
   TITLE:=Atheros common driver part
-  DEPENDS+= @PCI_SUPPORT||USB_SUPPORT||TARGET_ath79||TARGET_ath25 +kmod-mac80211
+  DEPENDS+= @PCI_SUPPORT||USB_SUPPORT||TARGET_ath79 +kmod-mac80211
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath.ko
   MENU:=1
 endef
@@ -145,7 +141,7 @@ define KernelPackage/ath5k
   $(call KernelPackage/mac80211/Default)
   TITLE:=Atheros 5xxx wireless cards support
   URL:=https://wireless.wiki.kernel.org/en/users/drivers/ath5k
-  DEPENDS+= @(PCI_SUPPORT||TARGET_ath25) +kmod-ath
+  DEPENDS+= @PCI_SUPPORT +kmod-ath
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath5k/ath5k.ko
   AUTOLOAD:=$(call AutoProbe,ath5k)
 endef
@@ -224,7 +220,7 @@ define KernelPackage/ath9k/config
 		bool "Add wireless noise as source of randomness to kernel entropy pool"
 		depends on PACKAGE_kmod-ath9k
 		select PACKAGE_kmod-random-core
-		default n
+		default y
 
 	config ATH9K_SUPPORT_PCOEM
 		bool "Support chips used in PC OEM cards"
@@ -316,7 +312,22 @@ define KernelPackage/ath11k/config
        config ATH11K_THERMAL
                bool "Enable thermal sensors and throttling support"
                depends on PACKAGE_kmod-ath11k
+               default y if TARGET_qualcommax
 
+endef
+
+define KernelPackage/ath11k-ahb
+  $(call KernelPackage/mac80211/Default)
+  TITLE:=Qualcomm 802.11ax AHB wireless chipset support
+  URL:=https://wireless.wiki.kernel.org/en/users/drivers/ath11k
+  DEPENDS+= @TARGET_qualcommax +kmod-ath11k +kmod-qrtr-smd
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ath11k/ath11k_ahb.ko
+  AUTOLOAD:=$(call AutoProbe,ath11k_ahb)
+endef
+
+define KernelPackage/ath11k-ahb/description
+This module adds support for Qualcomm Technologies 802.11ax family of
+chipsets with AHB bus.
 endef
 
 define KernelPackage/ath11k-pci
@@ -361,7 +372,7 @@ endef
 define KernelPackage/ar5523
   $(call KernelPackage/mac80211/Default)
   TITLE:=Driver for Atheros AR5523 USB sticks
-  DEPENDS:=@USB_SUPPORT +kmod-mac80211 +kmod-ath +kmod-usb-core +kmod-input-core 
+  DEPENDS:=@USB_SUPPORT +kmod-mac80211 +kmod-ath +kmod-usb-core +kmod-input-core
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/ar5523/ar5523.ko
   AUTOLOAD:=$(call AutoProbe,ar5523)
 endef

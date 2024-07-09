@@ -32,7 +32,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
 
 --- a/drivers/net/phy/mdio_bus.c
 +++ b/drivers/net/phy/mdio_bus.c
-@@ -737,6 +737,32 @@ out:
+@@ -742,6 +742,32 @@ out:
  }
  
  /**
@@ -65,7 +65,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * __mdiobus_read - Unlocked version of the mdiobus_read function
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -752,7 +778,10 @@ int __mdiobus_read(struct mii_bus *bus,
+@@ -757,7 +783,10 @@ int __mdiobus_read(struct mii_bus *bus,
  
  	lockdep_assert_held_once(&bus->mdio_lock);
  
@@ -77,7 +77,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  
  	trace_mdio_access(bus, 1, addr, regnum, retval, retval);
  	mdiobus_stats_acct(&bus->stats[addr], true, retval);
-@@ -762,6 +791,40 @@ int __mdiobus_read(struct mii_bus *bus,
+@@ -767,6 +796,40 @@ int __mdiobus_read(struct mii_bus *bus,
  EXPORT_SYMBOL(__mdiobus_read);
  
  /**
@@ -118,7 +118,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * __mdiobus_write - Unlocked version of the mdiobus_write function
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -778,7 +841,10 @@ int __mdiobus_write(struct mii_bus *bus,
+@@ -783,7 +846,10 @@ int __mdiobus_write(struct mii_bus *bus,
  
  	lockdep_assert_held_once(&bus->mdio_lock);
  
@@ -130,7 +130,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  
  	trace_mdio_access(bus, 0, addr, regnum, val, err);
  	mdiobus_stats_acct(&bus->stats[addr], false, err);
-@@ -788,6 +854,39 @@ int __mdiobus_write(struct mii_bus *bus,
+@@ -793,6 +859,39 @@ int __mdiobus_write(struct mii_bus *bus,
  EXPORT_SYMBOL(__mdiobus_write);
  
  /**
@@ -170,7 +170,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * __mdiobus_modify_changed - Unlocked version of the mdiobus_modify function
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -820,6 +919,43 @@ int __mdiobus_modify_changed(struct mii_
+@@ -825,6 +924,43 @@ int __mdiobus_modify_changed(struct mii_
  EXPORT_SYMBOL_GPL(__mdiobus_modify_changed);
  
  /**
@@ -214,7 +214,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * mdiobus_read_nested - Nested version of the mdiobus_read function
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -845,6 +981,79 @@ int mdiobus_read_nested(struct mii_bus *
+@@ -850,6 +986,79 @@ int mdiobus_read_nested(struct mii_bus *
  EXPORT_SYMBOL(mdiobus_read_nested);
  
  /**
@@ -294,7 +294,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * mdiobus_read - Convenience function for reading a given MII mgmt register
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -867,6 +1076,29 @@ int mdiobus_read(struct mii_bus *bus, in
+@@ -872,6 +1081,29 @@ int mdiobus_read(struct mii_bus *bus, in
  EXPORT_SYMBOL(mdiobus_read);
  
  /**
@@ -324,7 +324,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * mdiobus_write_nested - Nested version of the mdiobus_write function
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -893,6 +1125,33 @@ int mdiobus_write_nested(struct mii_bus
+@@ -898,6 +1130,33 @@ int mdiobus_write_nested(struct mii_bus
  EXPORT_SYMBOL(mdiobus_write_nested);
  
  /**
@@ -358,7 +358,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * mdiobus_write - Convenience function for writing a given MII mgmt register
   * @bus: the mii_bus struct
   * @addr: the phy address
-@@ -916,6 +1175,30 @@ int mdiobus_write(struct mii_bus *bus, i
+@@ -921,6 +1180,30 @@ int mdiobus_write(struct mii_bus *bus, i
  EXPORT_SYMBOL(mdiobus_write);
  
  /**
@@ -389,7 +389,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * mdiobus_modify - Convenience function for modifying a given mdio device
   *	register
   * @bus: the mii_bus struct
-@@ -937,6 +1220,51 @@ int mdiobus_modify(struct mii_bus *bus,
+@@ -942,6 +1225,51 @@ int mdiobus_modify(struct mii_bus *bus,
  EXPORT_SYMBOL_GPL(mdiobus_modify);
  
  /**
@@ -443,7 +443,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
   * @dev: target MDIO device
 --- a/drivers/net/phy/phy-core.c
 +++ b/drivers/net/phy/phy-core.c
-@@ -482,10 +482,16 @@ int __phy_read_mmd(struct phy_device *ph
+@@ -557,10 +557,16 @@ int __phy_read_mmd(struct phy_device *ph
  		struct mii_bus *bus = phydev->mdio.bus;
  		int phy_addr = phydev->mdio.addr;
  
@@ -464,7 +464,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  	}
  	return val;
  }
-@@ -538,12 +544,18 @@ int __phy_write_mmd(struct phy_device *p
+@@ -613,12 +619,18 @@ int __phy_write_mmd(struct phy_device *p
  		struct mii_bus *bus = phydev->mdio.bus;
  		int phy_addr = phydev->mdio.addr;
  
@@ -487,7 +487,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  	}
  	return ret;
  }
-@@ -749,6 +761,13 @@ EXPORT_SYMBOL_GPL(phy_modify_mmd);
+@@ -824,6 +836,13 @@ EXPORT_SYMBOL_GPL(phy_modify_mmd);
  
  static int __phy_read_page(struct phy_device *phydev)
  {
@@ -501,7 +501,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  	if (WARN_ONCE(!phydev->drv->read_page, "read_page callback not available, PHY driver not loaded?\n"))
  		return -EOPNOTSUPP;
  
-@@ -757,6 +776,13 @@ static int __phy_read_page(struct phy_de
+@@ -832,6 +851,13 @@ static int __phy_read_page(struct phy_de
  
  static int __phy_write_page(struct phy_device *phydev, int page)
  {
@@ -515,7 +515,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  	if (WARN_ONCE(!phydev->drv->write_page, "write_page callback not available, PHY driver not loaded?\n"))
  		return -EOPNOTSUPP;
  
-@@ -858,6 +884,18 @@ int phy_read_paged(struct phy_device *ph
+@@ -933,6 +959,18 @@ int phy_read_paged(struct phy_device *ph
  {
  	int ret = 0, oldpage;
  
@@ -534,7 +534,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  	oldpage = phy_select_page(phydev, page);
  	if (oldpage >= 0)
  		ret = __phy_read(phydev, regnum);
-@@ -879,6 +917,18 @@ int phy_write_paged(struct phy_device *p
+@@ -954,6 +992,18 @@ int phy_write_paged(struct phy_device *p
  {
  	int ret = 0, oldpage;
  
@@ -657,7 +657,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  {
 --- a/include/linux/phy.h
 +++ b/include/linux/phy.h
-@@ -80,6 +80,7 @@ extern const int phy_10gbit_features_arr
+@@ -81,6 +81,7 @@ extern const int phy_10gbit_features_arr
  #define PHY_IS_INTERNAL		0x00000001
  #define PHY_RST_AFTER_CLK_EN	0x00000002
  #define PHY_POLL_CABLE_TEST	0x00000004
@@ -665,7 +665,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  #define MDIO_DEVICE_IS_PHY	0x80000000
  
  /**
-@@ -420,6 +421,22 @@ struct mii_bus {
+@@ -428,6 +429,22 @@ struct mii_bus {
  
  	/** @shared: shared state across different PHYs */
  	struct phy_package_shared *shared[PHY_MAX_ADDR];
@@ -688,7 +688,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  };
  #define to_mii_bus(d) container_of(d, struct mii_bus, dev)
  
-@@ -1754,6 +1771,66 @@ static inline int __phy_package_read(str
+@@ -1825,6 +1842,66 @@ static inline int __phy_package_read(str
  	return __mdiobus_read(phydev->mdio.bus, shared->addr, regnum);
  }
  
@@ -755,7 +755,7 @@ Signed-off-by: Daniel Golle <daniel@makrotopia.org>
  static inline int phy_package_write(struct phy_device *phydev,
  				    u32 regnum, u16 val)
  {
-@@ -1776,6 +1853,72 @@ static inline int __phy_package_write(st
+@@ -1847,6 +1924,72 @@ static inline int __phy_package_write(st
  	return __mdiobus_write(phydev->mdio.bus, shared->addr, regnum, val);
  }
  

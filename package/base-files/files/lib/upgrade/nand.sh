@@ -28,7 +28,7 @@ ubi_mknod() {
 
 nand_find_volume() {
 	local ubidevdir ubivoldir
-	ubidevdir="/sys/devices/virtual/ubi/$1"
+	ubidevdir="/sys/class/ubi/"
 	[ ! -d "$ubidevdir" ] && return 1
 	for ubivoldir in $ubidevdir/${1}_*; do
 		[ ! -d "$ubivoldir" ] && continue
@@ -41,13 +41,12 @@ nand_find_volume() {
 }
 
 nand_find_ubi() {
-	local ubidevdir ubidev mtdnum
+	local ubidevdir ubidev mtdnum cmtdnum
 	mtdnum="$( find_mtd_index $1 )"
 	[ ! "$mtdnum" ] && return 1
-	for ubidevdir in /sys/devices/virtual/ubi/ubi*; do
-		[ ! -d "$ubidevdir" ] && continue
+	for ubidevdir in /sys/class/ubi/ubi*; do
+		[ ! -e "$ubidevdir/mtd_num" ] && continue
 		cmtdnum="$( cat $ubidevdir/mtd_num )"
-		[ ! "$mtdnum" ] && continue
 		if [ "$mtdnum" = "$cmtdnum" ]; then
 			ubidev=$( basename $ubidevdir )
 			ubi_mknod "$ubidevdir"
@@ -65,40 +64,12 @@ get_magic_long_tar() {
 	(tar xO${3}f "$1" "$2" | dd bs=4 count=1 | hexdump -v -n 4 -e '1/1 "%02x"') 2> /dev/null
 }
 
-identify_magic() {
-	local magic=$1
-	case "$magic" in
-		"55424923")
-			echo "ubi"
-			;;
-		"31181006")
-			echo "ubifs"
-			;;
-		"68737173")
-			echo "squashfs"
-			;;
-		"d00dfeed")
-			echo "fit"
-			;;
-		"4349"*)
-			echo "combined"
-			;;
-		"1f8b"*)
-			echo "gzip"
-			;;
-		*)
-			echo "unknown $magic"
-			;;
-	esac
-}
-
-
 identify() {
-	identify_magic $(nand_get_magic_long "$@")
+	identify_magic_long $(nand_get_magic_long "$@")
 }
 
 identify_tar() {
-	identify_magic $(get_magic_long_tar "$@")
+	identify_magic_long $(get_magic_long_tar "$@")
 }
 
 identify_if_gzip() {
@@ -140,7 +111,7 @@ nand_remove_ubiblock() {
 
 	local ubiblk="ubiblock${ubivol:3}"
 	if [ -e "/dev/$ubiblk" ]; then
-		umount "/dev/$ubiblk" && echo "unmounted /dev/$ubiblk" || :
+		umount "/dev/$ubiblk" 2>/dev/null && echo "unmounted /dev/$ubiblk" || :
 		if ! ubiblock -r "/dev/$ubivol"; then
 			echo "cannot remove $ubiblk"
 			return 1
@@ -290,10 +261,12 @@ nand_upgrade_ubinized() {
 	local ubi_file="$1"
 	local gz="$2"
 
+	local ubi_length=$( (${gz}cat "$ubi_file" | wc -c) 2> /dev/null)
+
 	nand_detach_ubi "$CI_UBIPART" || return 1
 
 	local mtdnum="$( find_mtd_index "$CI_UBIPART" )"
-	${gz}cat "$ubi_file" | ubiformat "/dev/mtd$mtdnum" -y -f - && ubiattach -m "$mtdnum"
+	${gz}cat "$ubi_file" | ubiformat "/dev/mtd$mtdnum" -S "$ubi_length" -y -f - && ubiattach -m "$mtdnum"
 }
 
 # Write the UBIFS image to UBI rootfs volume
@@ -328,6 +301,7 @@ nand_upgrade_fit() {
 nand_upgrade_tar() {
 	local tar_file="$1"
 	local gz="$2"
+	local jffs2_markers="${CI_JFFS2_CLEAN_MARKERS:-0}"
 
 	# WARNING: This fails if tar contains more than one 'sysupgrade-*' directory.
 	local board_dir="$(tar t${gz}f "$tar_file" | grep -m 1 '^sysupgrade-.*/$')"
@@ -356,6 +330,7 @@ nand_upgrade_tar() {
 			ubi_kernel_length="$kernel_length"
 		fi
 	fi
+
 	local has_env=0
 	nand_upgrade_prepare_ubi "$rootfs_length" "$rootfs_type" "$ubi_kernel_length" "$has_env" || return 1
 
@@ -367,8 +342,14 @@ nand_upgrade_tar() {
 	fi
 	if [ "$kernel_length" ]; then
 		if [ "$kernel_mtd" ]; then
-			tar xO${gz}f "$tar_file" "$board_dir/kernel" | \
-				mtd write - "$CI_KERNPART"
+			if [ "$jffs2_markers" = 1 ]; then
+				flash_erase -j "/dev/mtd${kernel_mtd}" 0 0
+				tar xO${gz}f "$tar_file" "$board_dir/kernel" | \
+					nandwrite "/dev/mtd${kernel_mtd}" -
+			else
+				tar xO${gz}f "$tar_file" "$board_dir/kernel" | \
+					mtd write - "$CI_KERNPART"
+			fi
 		else
 			local ubidev="$( nand_find_ubi "${CI_KERN_UBIPART:-$CI_UBIPART}" )"
 			local kern_ubivol="$( nand_find_volume $ubidev "$CI_KERNPART" )"
@@ -481,7 +462,11 @@ nand_do_platform_check() {
 
 	local gz="$(identify_if_gzip "$file")"
 	local file_type="$(identify "$file" "" "$gz")"
-	local control_length=$( (tar xO${gz}f "$file" "sysupgrade-$board_name/CONTROL" | wc -c) 2> /dev/null)
+	local control_length=$( (tar xO${gz}f "$file" "sysupgrade-${board_name//,/_}/CONTROL" | wc -c) 2> /dev/null)
+
+	if [ "$control_length" = 0 ]; then
+		control_length=$( (tar xO${gz}f "$file" "sysupgrade-${board_name//_/,}/CONTROL" | wc -c) 2> /dev/null)
+	fi
 
 	if [ "$control_length" != 0 ]; then
 		nand_verify_tar_file "$file" "$gz" || return 1

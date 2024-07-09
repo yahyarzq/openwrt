@@ -5,14 +5,12 @@
   - "target/linux/apm821xx/**"
 "target/archs38":
   - "target/linux/archs38/**"
-"target/armvirt":
-  - "target/linux/armvirt/**"
+"target/armsr":
+  - "target/linux/armsr/**"
 "target/at91":
   - "target/linux/at91/**"
   - "package/boot/at91bootstrap/**"
   - "package/boot/uboot-at91/**"
-"target/ath25":
-  - "target/linux/ath25/**"
 "target/ath79":
   - "target/linux/ath79/**"
 "target/bcm27xx":
@@ -25,12 +23,18 @@
   - "package/boot/uboot-bcm4908/**"
 "target/bcm53xx":
   - "target/linux/bcm53xx/**"
+  - "package/boot/uboot-bcm53xx/**"
 "target/bcm63xx":
   - "target/linux/bcm63xx/**"
   - "package/kernel/bcm63xx-cfe/**"
   - "package/boot/arm-trusted-firmware-bcm63xx/**"
 "target/bmips":
   - "target/linux/bmips/**"
+  - "package/boot/uboot-bmips/**"
+"target/d1":
+  - "target/linux/d1/**"
+  - "package/boot/uboot-d1/**"
+  - "package/boot/opensbi/**"
 "target/gemini":
   - "target/linux/gemini/**"
 "target/imx":
@@ -41,6 +45,8 @@
   - "target/linux/ipq40xx/**"
 "target/ipq806x":
   - "target/linux/ipq806x/**"
+"target/qualcommax":
+  - "target/linux/qualcommax/**"
 "target/kirkwood":
   - "target/linux/kirkwood/**"
   - "package/boot/uboot-kirkwood/**"
@@ -72,14 +78,9 @@
   - "package/boot/uboot-mxs/**"
 "target/octeon":
   - "target/linux/octeon/**"
-"target/octeontx":
-  - "target/linux/octeontx/**"
 "target/omap":
   - "target/linux/omap/**"
   - "package/boot/uboot-omap/**"
-"target/oxnas":
-  - "target/linux/oxnas/**"
-  - "package/boot/uboot-oxnas/**"
 "target/pistachio":
   - "target/linux/pistachio/**"
 "target/qoriq":
@@ -92,6 +93,10 @@
   - "target/linux/rockchip/**"
   - "package/boot/arm-trusted-firmware-rockchip/**"
   - "package/boot/uboot-rockchip/**"
+"target/sifiveu":
+  - "target/linux/sifiveu/**"
+  - "package/boot/uboot-sifiveu/**"
+  - "package/boot/opensbi/**"
 "target/sunxi":
   - "target/linux/sunxi/**"
   - "package/boot/arm-trusted-firmware-sunxi/**"
